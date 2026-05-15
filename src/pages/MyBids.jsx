@@ -176,6 +176,13 @@ export default function MyBids() {
                       </p>
                     )}
                     {bid.aciklama && <p className="text-xs text-gray-400 mt-1 italic">{bid.aciklama}</p>}
+                    {(bid.startDate || bid.endDate) && (
+                      <p className="text-xs text-blue-600 mt-1">
+                        📅 {bid.startDate ? new Date(bid.startDate).toLocaleDateString('tr-TR') : '—'}
+                        {' → '}
+                        {bid.endDate   ? new Date(bid.endDate).toLocaleDateString('tr-TR')   : '—'}
+                      </p>
+                    )}
                     {bid.rejectionReason && (
                       <p className="text-xs text-red-600 mt-1">Red nedeni: {bid.rejectionReason}</p>
                     )}

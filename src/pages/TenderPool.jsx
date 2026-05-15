@@ -36,7 +36,14 @@ function Countdown({ deadline }) {
 
 // ── Bid Modal ─────────────────────────────────────────────────────────
 function BidModal({ tender, onClose, onSuccess }) {
-  const [form, setForm]     = useState({ amount: '', currency: 'TRY', note: '', validityMinutes: '60' });
+  const defaultStart = tender.teslimTarihi
+    ? new Date(tender.teslimTarihi).toISOString().split('T')[0]
+    : '';
+
+  const [form, setForm] = useState({
+    amount: '', currency: 'TRY', note: '', validityMinutes: '60',
+    startDate: defaultStart, endDate: '',
+  });
   const [error, setError]   = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -51,6 +58,8 @@ function BidModal({ tender, onClose, onSuccess }) {
         currency: form.currency,
         note: form.note || undefined,
         validityMinutes: Number(form.validityMinutes),
+        startDate: form.startDate || undefined,
+        endDate:   form.endDate   || undefined,
       });
       onSuccess();
     } catch (e) {
@@ -113,6 +122,26 @@ function BidModal({ tender, onClose, onSuccess }) {
             </div>
           </div>
 
+          {/* Taşıma tarihleri */}
+          <div>
+            <label className="label flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Taşıma Tarihleri
+              <span className="text-gray-400 text-xs font-normal">(opsiyonel — farklı öneri verebilirsiniz)</span>
+            </label>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="label text-xs">Taşıma Başlangıcı</label>
+                <input type="date" className="input" value={form.startDate}
+                  onChange={e => setForm(p => ({ ...p, startDate: e.target.value }))} />
+              </div>
+              <div>
+                <label className="label text-xs">Taşıma Bitişi</label>
+                <input type="date" className="input" value={form.endDate}
+                  onChange={e => setForm(p => ({ ...p, endDate: e.target.value }))} />
+              </div>
+            </div>
+          </div>
+
           <div>
             <label className="label">Teklif Geçerlilik Süresi (Dakika)</label>
             <input type="number" min="10" max="1440" className="input"
@@ -122,7 +151,7 @@ function BidModal({ tender, onClose, onSuccess }) {
 
           <div>
             <label className="label">Not (Opsiyonel)</label>
-            <textarea rows={3} className="input resize-none"
+            <textarea rows={2} className="input resize-none"
               placeholder="Özel koşullar, teslimat garantisi vb."
               value={form.note}
               onChange={e => setForm(p => ({ ...p, note: e.target.value }))} />
