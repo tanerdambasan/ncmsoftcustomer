@@ -39,7 +39,7 @@ export default function CustomerOrderDetail() {
     <div className="text-center py-20 text-gray-400">Sipariş bulunamadı.</div>
   );
 
-  const { order, statusHistory = [], tracking = [], finance = [], notes = [] } = data;
+  const { order, statusHistory = [], tracking = [], finance = [], notes = [], items = [] } = data;
   const sc = statusColors[order.status] || 'bg-gray-100 text-gray-600';
   const sl = statusLabels[order.status] || order.status;
 
@@ -95,6 +95,61 @@ export default function CustomerOrderDetail() {
               </div>
             </div>
           </div>
+
+          {/* Cargo / Items */}
+          {items.length > 0 && (
+            <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+              <h2 className="font-semibold text-gray-800 mb-3">Yük / Kalem Bilgileri</h2>
+              <div className="space-y-3">
+                {items.map((it, i) => {
+                  const details = [
+                    it.quantity != null && `${it.quantity}${it.unit_type ? ' ' + it.unit_type : ' adet'}`,
+                    it.gross_weight_kg != null && `${Number(it.gross_weight_kg).toLocaleString('tr-TR')} kg`,
+                    it.volume_cbm != null && `${Number(it.volume_cbm).toLocaleString('tr-TR')} m³`,
+                    it.package_type,
+                    it.container_no && `Konteyner: ${it.container_no}`,
+                  ].filter(Boolean);
+                  const refs = [
+                    ['Müşteri Ref.', it.customer_reference],
+                    ['GTIP', it.gtip_code],
+                    ['HS Kod', it.hs_code],
+                    ['Yük Ref.', it.cargo_reference_no],
+                    ['Barkod', it.barcode],
+                    ['Lot No', it.lot_no],
+                    ['Seri No', it.serial_no],
+                    ['MRN', it.mrn_no],
+                    ['UN No', it.un_number],
+                    ['IMDG', it.imdg_code],
+                    ['PO No', it.po_number],
+                  ].filter(([, v]) => v);
+                  return (
+                    <div key={it.id || i} className="text-sm border-b border-gray-50 last:border-0 pb-3 last:pb-0">
+                      <p className="font-medium text-gray-800">
+                        {it.item_no ? `#${it.item_no} · ` : ''}{it.description || it.trade_name || 'Kalem'}
+                      </p>
+                      {details.length > 0 && (
+                        <p className="text-xs text-gray-500 mt-0.5">{details.join(' · ')}</p>
+                      )}
+                      {(it.hazardous_material || it.hazardous_class) && (
+                        <span className="inline-block mt-1 text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                          Tehlikeli Madde{it.hazardous_class ? ` (${it.hazardous_class})` : ''}
+                        </span>
+                      )}
+                      {refs.length > 0 && (
+                        <div className="flex flex-wrap gap-x-4 gap-y-0.5 mt-1.5">
+                          {refs.map(([label, val]) => (
+                            <span key={label} className="text-xs text-gray-400">
+                              {label}: <span className="text-gray-600 font-medium">{val}</span>
+                            </span>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* Driver info */}
           {(order.driver_name || order.vehicle_plate) && (
