@@ -71,7 +71,7 @@ function NewOrderModal({ onClose, onCreated }) {
         <form onSubmit={submit} className="p-6 space-y-4">
           {error && <p className="bg-red-50 text-red-600 text-sm p-3 rounded-lg">{error}</p>}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Servis Tipi</label>
               <select className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
@@ -109,7 +109,7 @@ function NewOrderModal({ onClose, onCreated }) {
               value={form.cargoDescription} onChange={e => setForm(p=>({...p,cargoDescription:e.target.value}))} />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">Ağırlık (kg)</label>
               <input type="number" placeholder="0"
@@ -242,7 +242,8 @@ export default function CustomerOrders() {
             <p className="text-sm">Sipariş bulunamadı</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Sipariş No</th>
@@ -280,6 +281,7 @@ export default function CustomerOrders() {
               })}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 

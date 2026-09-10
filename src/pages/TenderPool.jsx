@@ -104,7 +104,7 @@ function BidModal({ tender, onClose, onSuccess }) {
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="label">Teklif Tutarı *</label>
               <input type="number" min="1" step="0.01" className="input"
@@ -128,7 +128,7 @@ function BidModal({ tender, onClose, onSuccess }) {
               <Clock className="w-3.5 h-3.5" /> Taşıma Tarihleri
               <span className="text-gray-400 text-xs font-normal">(opsiyonel — farklı öneri verebilirsiniz)</span>
             </label>
-            <div className="grid grid-cols-2 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               <div>
                 <label className="label text-xs">Taşıma Başlangıcı</label>
                 <input type="date" className="input" value={form.startDate}

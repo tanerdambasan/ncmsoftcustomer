@@ -179,7 +179,8 @@ export default function CustomerFinance() {
             <p className="text-sm">Fatura bulunamadı</p>
           </div>
         ) : (
-          <table className="w-full text-sm">
+          <div className="overflow-x-auto">
+          <table className="w-full min-w-[720px] text-sm">
             <thead className="bg-gray-50 border-b border-gray-100">
               <tr>
                 <th className="px-4 py-3 text-left font-semibold text-gray-600">Fatura No</th>
@@ -211,6 +212,7 @@ export default function CustomerFinance() {
               ))}
             </tbody>
           </table>
+          </div>
         )}
       </div>
 
