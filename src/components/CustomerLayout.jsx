@@ -84,7 +84,7 @@ export default function CustomerLayout({ children }) {
   );
 
   return (
-    <div className="flex h-screen bg-gray-50">
+    <div className="flex h-dvh bg-gray-50">
       {/* Desktop sidebar */}
       <aside className="hidden lg:flex w-60 flex-col bg-blue-900 flex-shrink-0">
         <SidebarContent />
@@ -94,7 +94,7 @@ export default function CustomerLayout({ children }) {
       {open && (
         <div className="fixed inset-0 z-40 lg:hidden">
           <div className="absolute inset-0 bg-black/60" onClick={() => setOpen(false)} />
-          <aside className="relative w-60 h-full flex flex-col bg-blue-900 z-50">
+          <aside className="relative w-60 h-dvh flex flex-col bg-blue-900 z-50">
             <SidebarContent />
           </aside>
         </div>

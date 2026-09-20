@@ -90,7 +90,7 @@ export default function Layout({ children }) {
   const [mobileOpen, setMobileOpen] = useState(false);
 
   return (
-    <div className="flex h-screen overflow-hidden bg-gray-50">
+    <div className="flex h-dvh overflow-hidden bg-gray-50">
       {/* Desktop Sidebar */}
       <aside className="hidden lg:flex flex-col w-60 bg-sidebar shrink-0">
         <SidebarContent />
@@ -100,7 +100,7 @@ export default function Layout({ children }) {
       {mobileOpen && (
         <div className="fixed inset-0 z-50 flex lg:hidden">
           <div className="absolute inset-0 bg-black/50" onClick={() => setMobileOpen(false)} />
-          <aside className="relative w-60 bg-sidebar flex flex-col z-10">
+          <aside className="relative w-60 h-dvh bg-sidebar flex flex-col z-10">
             <SidebarContent mobile onClose={() => setMobileOpen(false)} />
           </aside>
         </div>

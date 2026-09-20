@@ -112,7 +112,7 @@ export default function ConfirmPage() {
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+      <div className="min-h-dvh bg-gray-50 flex items-center justify-center">
         <div className="text-gray-400 text-sm">Link doğrulanıyor…</div>
       </div>
     );
@@ -120,7 +120,7 @@ export default function ConfirmPage() {
 
   if (loadError) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-dvh bg-gray-50 flex items-center justify-center p-4">
         <div className="card max-w-md w-full p-8 text-center">
           <XCircle className="w-14 h-14 text-red-400 mx-auto mb-4" />
           <h2 className="text-lg font-bold text-gray-900 mb-2">Geçersiz Link</h2>
@@ -133,7 +133,7 @@ export default function ConfirmPage() {
   if (result) {
     const isConfirmed = result.action === 'confirmed' || result.action === 'already_confirmed';
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+      <div className="min-h-dvh bg-gray-50 flex items-center justify-center p-4">
         <div className="card max-w-md w-full p-8 text-center">
           {isConfirmed ? (
             <>
@@ -167,7 +167,7 @@ export default function ConfirmPage() {
   const bid = info?.bid;
 
   return (
-    <div className="min-h-screen bg-gray-50 py-10 px-4">
+    <div className="min-h-dvh bg-gray-50 py-10 px-4">
       <div className="max-w-2xl mx-auto">
         {/* Header */}
         <div className="text-center mb-8">
