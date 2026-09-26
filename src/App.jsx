@@ -10,6 +10,7 @@ import TenderPool   from './pages/TenderPool';
 import MyBids       from './pages/MyBids';
 import OperationsPanel from './pages/OperationsPanel';
 import Finance      from './pages/Finance';
+import Notifications from './pages/Notifications';
 import ConfirmPage  from './pages/ConfirmPage';
 
 // Customer pages
@@ -70,6 +71,7 @@ function AppRoutes() {
       <Route path="/bids"       element={<PrivateSupplierRoute><MyBids /></PrivateSupplierRoute>} />
       <Route path="/operations" element={<PrivateSupplierRoute><OperationsPanel /></PrivateSupplierRoute>} />
       <Route path="/finance"    element={<PrivateSupplierRoute><Finance /></PrivateSupplierRoute>} />
+      <Route path="/notifications" element={<PrivateSupplierRoute><Notifications /></PrivateSupplierRoute>} />
 
       {/* Customer Portal */}
       <Route path="/c"              element={<PrivateCustomerRoute><CustomerDashboard /></PrivateCustomerRoute>} />

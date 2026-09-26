@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import customerApi from '../../api/customerClient';
-import { MessageSquare, Plus, X, ChevronDown, ChevronUp, Send } from 'lucide-react';
+import { MessageSquare, Plus, X, ChevronDown, ChevronUp, Send, AlertCircle } from 'lucide-react';
 
 const TICKET_TYPES = [
   { value: 'complaint', label: '🚨 Şikayet', color: 'bg-red-100 text-red-700' },
@@ -26,8 +26,15 @@ const STATUS_LABELS = {
 
 function NewTicketModal({ onClose, onCreated }) {
   const [form, setForm] = useState({ ticketType: 'request', subject: '', description: '', priority: 'normal' });
+  const [orders, setOrders] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
+
+  useEffect(() => {
+    customerApi.get('/orders', { params: { limit: 50 } })
+      .then(r => setOrders(r.data.data.orders || []))
+      .catch(() => setOrders([]));
+  }, []);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -42,7 +49,7 @@ function NewTicketModal({ onClose, onCreated }) {
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
-      <div className="bg-white rounded-2xl w-full max-w-lg shadow-2xl">
+      <div className="bg-white rounded-2xl w-full max-w-lg max-h-[90dvh] overflow-y-auto shadow-2xl">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="text-lg font-bold text-gray-900">Yeni Destek Talebi</h2>
           <button onClick={onClose} className="p-2 hover:bg-gray-100 rounded-lg"><X className="w-5 h-5" /></button>
@@ -94,6 +101,19 @@ function NewTicketModal({ onClose, onCreated }) {
               value={form.description} onChange={e => setForm(p=>({...p, description: e.target.value}))} />
           </div>
 
+          <div>
+            <label className="block text-sm font-medium text-gray-700 mb-1">İlgili Sipariş</label>
+            <select
+              className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+              value={form.orderId || ''}
+              onChange={e => setForm(p => ({ ...p, orderId: e.target.value || undefined }))}
+            >
+              <option value="">Sipariş seçmeden devam et</option>
+              {orders.map(order => <option key={order.id} value={order.id}>{order.order_no} · {order.status}</option>)}
+            </select>
+            {orders.length === 0 && <p className="text-xs text-gray-400 mt-1">Bağlanabilecek gerçek sipariş bulunamadı.</p>}
+          </div>
+
           <div className="flex gap-3 pt-1">
             <button type="button" onClick={onClose}
               className="flex-1 py-2.5 border border-gray-300 rounded-xl text-sm font-medium text-gray-700">İptal</button>
@@ -112,9 +132,12 @@ function TicketDetail({ ticketId, onClose }) {
   const [data, setData] = useState(null);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
-    customerApi.get(`/crm/tickets/${ticketId}`).then(r => setData(r.data.data)).catch(() => {});
+    setError('');
+    customerApi.get(`/crm/tickets/${ticketId}`).then(r => setData(r.data.data))
+      .catch(err => setError(err.response?.data?.message || 'Bilet detayı yüklenemedi.'));
   }, [ticketId]);
 
   const sendReply = async () => {
@@ -125,7 +148,9 @@ function TicketDetail({ ticketId, onClose }) {
       setReply('');
       const r = await customerApi.get(`/crm/tickets/${ticketId}`);
       setData(r.data.data);
-    } catch {}
+    } catch (err) {
+      setError(err.response?.data?.message || 'Yanıt gönderilemedi.');
+    }
     setSending(false);
   };
 
@@ -198,15 +223,17 @@ export default function CustomerCRM() {
   const [selectedId, setSelectedId] = useState(null);
   const [statusFilter, setStatusFilter] = useState('');
   const [typeFilter, setTypeFilter] = useState('');
+  const [error, setError] = useState('');
 
   const load = () => {
     setLoading(true);
+    setError('');
     const params = {};
     if (statusFilter) params.status = statusFilter;
     if (typeFilter)   params.type   = typeFilter;
     customerApi.get('/crm/tickets', { params })
       .then(r => { setTickets(r.data.data.tickets); setTotal(r.data.data.total); })
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.message || 'Destek kayıtları yüklenemedi.'))
       .finally(() => setLoading(false));
   };
 
@@ -224,6 +251,13 @@ export default function CustomerCRM() {
           <Plus className="w-4 h-4" /> Yeni Bilet
         </button>
       </div>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" /> {error}
+          <button onClick={load} className="ml-auto underline font-medium">Tekrar dene</button>
+        </div>
+      )}
 
       {/* Filters */}
       <div className="flex flex-wrap gap-2">

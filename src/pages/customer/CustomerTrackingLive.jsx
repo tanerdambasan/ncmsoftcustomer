@@ -3,7 +3,8 @@ import { MapContainer, TileLayer, Marker, Popup, Polyline, useMap } from 'react-
 import { io } from 'socket.io-client';
 import L from 'leaflet';
 import customerApi from '../../api/customerClient';
-import { MapPin, Truck, Phone, User, Search, RefreshCw, Clock, Navigation, Package } from 'lucide-react';
+import { MapPin, Truck, Phone, User, Search, RefreshCw, Clock, Navigation, Package, AlertCircle } from 'lucide-react';
+import { ACTIVE_ORDER_STATUSES, ORDER_STATUS_COLORS, orderStatusLabel } from '../../utils/customerStatus';
 import 'leaflet/dist/leaflet.css';
 
 // ── Leaflet ikon düzeltmesi ──────────────────────────────────
@@ -46,20 +47,29 @@ function MapController({ liveLocation, destination, trigger }) {
 
 // ── Yardımcılar ──────────────────────────────────────────────
 const STATUS_CFG = {
+  draft:      { label: 'Taslak',              icon: '📝', dot: '#6b7280' },
+  open:       { label: 'Talep Açık',          icon: '📋', dot: '#3b82f6' },
+  planned:    { label: 'Planlandı',           icon: '📅', dot: '#6366f1' },
+  loading:    { label: 'Yükleme Aşamasında',  icon: '📦', dot: '#eab308' },
   new:        { label: 'Sipariş Oluşturuldu', icon: '📋', dot: '#3b82f6' },
   confirmed:  { label: 'Onaylandı',           icon: '✅', dot: '#8b5cf6' },
   in_transit: { label: 'Yola Çıktı',          icon: '🚛', dot: '#f59e0b' },
   at_customs: { label: 'Gümrük İşlemi',       icon: '🏛️', dot: '#f97316' },
+  arrived:    { label: 'Varış Noktasında',    icon: '📍', dot: '#06b6d4' },
   delivered:  { label: 'Teslim Edildi',        icon: '📦', dot: '#22c55e' },
+  completed:  { label: 'Tamamlandı',          icon: '✅', dot: '#16a34a' },
+  ready_to_invoice: { label: 'Faturalama Bekliyor', icon: '🧾', dot: '#9333ea' },
+  invoiced:   { label: 'Faturalandı',         icon: '🧾', dot: '#7c3aed' },
+  closed:     { label: 'Kapatıldı',           icon: '🔒', dot: '#475569' },
   cancelled:  { label: 'İptal Edildi',         icon: '❌', dot: '#ef4444' },
 };
 
-const slugLabel = (s) => STATUS_CFG[s]?.label || s;
+const slugLabel = (s) => orderStatusLabel(s);
 const fmtKm  = (m) => m >= 1000 ? `${(m / 1000).toFixed(0)} km` : `${m} m`;
 const fmtHr  = (s) => { const h = Math.floor(s / 3600); const m = Math.round((s % 3600) / 60); return h > 0 ? `${h} sa ${m > 0 ? m + ' dk' : ''}` : `${m} dk`; };
 const fmtDT  = (d) => d ? new Date(d).toLocaleString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' }) : '—';
 const fmtD   = (d) => d ? new Date(d).toLocaleDateString('tr-TR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const ACTIVE_ST = ['new', 'confirmed', 'in_transit', 'at_customs'];
+const ACTIVE_ST = [...ACTIVE_ORDER_STATUSES, 'new', 'confirmed'];
 
 // ════════════════════════════════════════════════════════════
 export default function CustomerTrackingLive() {
@@ -72,14 +82,19 @@ export default function CustomerTrackingLive() {
   const [routeInfo, setRouteInfo]       = useState(null);
   const [routeLoading, setRouteLoading] = useState(false);
   const [search, setSearch]             = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
   const [loading, setLoading]           = useState(true);
   const [trackLoading, setTrackLoading] = useState(false);
+  const [error, setError] = useState('');
   const [fitTrigger, setFitTrigger]     = useState(0);
   const socketRef = useRef(null);
 
   // Socket.IO
   useEffect(() => {
-    const s = io('http://localhost:3000', { transports: ['polling'], reconnection: true });
+    setError('');
+    const configuredApiUrl = String(import.meta.env.VITE_API_URL || '').trim();
+    const socketOrigin = new URL(configuredApiUrl || window.location.origin, window.location.origin).origin;
+    const s = io(socketOrigin, { transports: ['polling'], reconnection: true });
     socketRef.current = s;
     return () => s.disconnect();
   }, []);
@@ -87,11 +102,10 @@ export default function CustomerTrackingLive() {
   // Aktif siparişler
   useEffect(() => {
     Promise.all([
-      customerApi.get('/orders', { params: { limit: 50, status: 'in_transit' } }),
-      customerApi.get('/orders', { params: { limit: 50, status: 'at_customs' } }),
-    ]).then(([r1, r2]) => {
-      setOrders([...(r1.data.data.orders || []), ...(r2.data.data.orders || [])]);
-    }).catch(() => {}).finally(() => setLoading(false));
+      customerApi.get('/orders', { params: { limit: 50 } }),
+    ]).then(([r1]) => {
+      setOrders(r1.data.data.orders || []);
+    }).catch(err => setError(err.response?.data?.message || 'Aktif siparişler yüklenemedi.')).finally(() => setLoading(false));
   }, []);
 
   // OSRM rota
@@ -147,7 +161,7 @@ export default function CustomerTrackingLive() {
   useEffect(() => {
     if (!socketRef.current || !selected) return;
     const h = (d) => {
-      if (d.orderId === selected || d.driverId) {
+      if (d.orderId === selected) {
         const loc = [Number(d.lat), Number(d.lng)];
         setLiveLocation(loc);
         setFitTrigger(t => t + 1);
@@ -161,13 +175,26 @@ export default function CustomerTrackingLive() {
     };
   }, [selected, destination]);
 
-  const filtered = orders.filter(o => !search || o.order_no.toLowerCase().includes(search.toLowerCase()));
+  const filtered = orders.filter(o => {
+    const matchesSearch = !search || o.order_no.toLowerCase().includes(search.toLowerCase());
+    const matchesStatus = statusFilter === 'all'
+      || (statusFilter === 'active' && ACTIVE_ST.includes(o.status))
+      || (statusFilter === 'completed' && ['delivered', 'completed', 'invoiced', 'closed'].includes(o.status));
+    return matchesSearch && matchesStatus;
+  });
 
   return (
     <div className="flex flex-col gap-4">
       <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
         <MapPin className="w-5 h-5 text-blue-600" /> Canlı Takip
       </h1>
+
+      {error && (
+        <div className="bg-red-50 border border-red-200 text-red-700 text-sm px-4 py-3 rounded-xl flex items-center gap-2">
+          <AlertCircle className="w-4 h-4" /> {error}
+          <button onClick={() => window.location.reload()} className="ml-auto underline font-medium">Tekrar dene</button>
+        </div>
+      )}
 
       <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
 
@@ -179,6 +206,11 @@ export default function CustomerTrackingLive() {
               className="w-full pl-9 pr-4 py-2 border border-gray-300 rounded-xl text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
               value={search} onChange={e => setSearch(e.target.value)} />
           </div>
+          <select value={statusFilter} onChange={e => setStatusFilter(e.target.value)} className="w-full border border-gray-300 rounded-xl px-3 py-2 text-sm bg-white">
+            <option value="all">Tüm sevkiyatlar</option>
+            <option value="active">Aktif taşıma</option>
+            <option value="completed">Teslim edilenler</option>
+          </select>
 
           {loading ? (
             <div className="flex justify-center py-8">
@@ -187,7 +219,7 @@ export default function CustomerTrackingLive() {
           ) : filtered.length === 0 ? (
             <div className="bg-white rounded-xl border border-gray-100 p-6 text-center">
               <Truck className="w-8 h-8 mx-auto mb-2 text-gray-200" />
-              <p className="text-sm text-gray-400">Aktif sefer yok</p>
+               <p className="text-sm text-gray-400">Bu filtrede sevkiyat yok</p>
             </div>
           ) : (
             <div className="space-y-2">
@@ -307,11 +339,7 @@ export default function CustomerTrackingLive() {
                 <div className="flex items-center gap-2.5">
                   <Package className="w-4 h-4 text-blue-600" />
                   <span className="font-semibold text-sm text-gray-800">{trackData.order.order_no}</span>
-                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
-                    trackData.order.status === 'in_transit' ? 'bg-yellow-100 text-yellow-700' :
-                    trackData.order.status === 'at_customs' ? 'bg-orange-100 text-orange-700' :
-                    'bg-blue-100 text-blue-700'
-                  }`}>{slugLabel(trackData.order.status)}</span>
+                  <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${ORDER_STATUS_COLORS[trackData.order.status] || 'bg-blue-100 text-blue-700'}`}>{slugLabel(trackData.order.status)}</span>
                 </div>
                 <div className="flex items-center gap-3">
                   {trackData.order.eta && (

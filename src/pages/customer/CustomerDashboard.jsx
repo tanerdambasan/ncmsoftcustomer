@@ -5,15 +5,7 @@ import {
   Package, Truck, MessageSquare, Receipt,
   ArrowRight, Clock, CheckCircle, AlertCircle, TrendingUp,
 } from 'lucide-react';
-
-const statusLabels = {
-  new: { label: 'Yeni', color: 'bg-blue-100 text-blue-700' },
-  confirmed: { label: 'Onaylandı', color: 'bg-purple-100 text-purple-700' },
-  in_transit: { label: 'Yolda', color: 'bg-yellow-100 text-yellow-700' },
-  at_customs: { label: 'Gümrükte', color: 'bg-orange-100 text-orange-700' },
-  delivered: { label: 'Teslim', color: 'bg-green-100 text-green-700' },
-  cancelled: { label: 'İptal', color: 'bg-red-100 text-red-700' },
-};
+import { orderStatusColor, orderStatusLabel } from '../../utils/customerStatus';
 
 function StatCard({ icon: Icon, label, value, color, sub }) {
   return (
@@ -33,11 +25,12 @@ function StatCard({ icon: Icon, label, value, color, sub }) {
 export default function CustomerDashboard() {
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     customerApi.get('/dashboard')
       .then(r => setData(r.data.data))
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.message || 'Panel verileri yüklenemedi.'))
       .finally(() => setLoading(false));
   }, []);
 
@@ -47,7 +40,16 @@ export default function CustomerDashboard() {
     </div>
   );
 
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+      <AlertCircle className="w-9 h-9 text-red-500" />
+      <p className="text-sm text-red-600">{error}</p>
+      <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium">Tekrar dene</button>
+    </div>
+  );
+
   const { orderStats = {}, openTickets = 0, recentOrders = [], finance = {} } = data || {};
+  const financeRows = finance.byCurrency || [];
 
   return (
     <div className="space-y-6">
@@ -65,9 +67,11 @@ export default function CustomerDashboard() {
         <StatCard icon={MessageSquare} label="Açık Biletler" value={openTickets}
           color="bg-orange-100 text-orange-600" />
         <StatCard icon={Receipt} label="Borç Bakiye"
-          value={`${(finance.outstanding || 0).toLocaleString('tr-TR')} ${finance.currency || 'TRY'}`}
+          value={financeRows.length > 1 ? `${financeRows.length} para birimi` : `${(finance.outstanding || 0).toLocaleString('tr-TR')} ${finance.currency || 'TRY'}`}
           color="bg-purple-100 text-purple-600"
-          sub={`Toplam Fatura: ${(finance.totalInvoiced || 0).toLocaleString('tr-TR')}`} />
+          sub={financeRows.length > 1
+            ? financeRows.map(row => `${row.outstanding.toLocaleString('tr-TR')} ${row.currency}`).join(' · ')
+            : `Toplam Fatura: ${(finance.totalInvoiced || 0).toLocaleString('tr-TR')}`} />
       </div>
 
       {/* Quick actions */}
@@ -76,7 +80,7 @@ export default function CustomerDashboard() {
           className="flex items-center gap-3 p-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl shadow-sm transition-colors">
           <Package className="w-5 h-5" />
           <div className="flex-1">
-            <p className="font-semibold text-sm">Yeni Sipariş</p>
+            <p className="font-semibold text-sm">Yeni Taşıma Talebi</p>
             <p className="text-xs text-blue-200">Taşıma talebi oluştur</p>
           </div>
           <ArrowRight className="w-4 h-4" />
@@ -114,7 +118,7 @@ export default function CustomerDashboard() {
         ) : (
           <div className="divide-y divide-gray-50">
             {recentOrders.map(order => {
-              const s = statusLabels[order.status] || { label: order.status, color: 'bg-gray-100 text-gray-600' };
+              const statusLabel = orderStatusLabel(order.status);
               return (
                 <div key={order.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-50 transition-colors">
                   <div>
@@ -127,7 +131,7 @@ export default function CustomerDashboard() {
                         {Number(order.total_sale_price).toLocaleString('tr-TR')} {order.currency}
                       </span>
                     )}
-                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${s.color}`}>{s.label}</span>
+                    <span className={`text-xs px-2 py-1 rounded-full font-medium ${orderStatusColor(order.status)}`}>{statusLabel}</span>
                     <Link to={`/c/orders/${order.id}`} className="text-blue-500 hover:text-blue-700">
                       <ArrowRight className="w-4 h-4" />
                     </Link>

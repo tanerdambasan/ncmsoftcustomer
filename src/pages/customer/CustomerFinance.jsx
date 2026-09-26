@@ -2,6 +2,9 @@ import React, { useEffect, useState } from 'react';
 import customerApi from '../../api/customerClient';
 import { Receipt, AlertCircle, CheckCircle, CreditCard, X } from 'lucide-react';
 
+const billingStatus = (value) => String(value || '').trim().toUpperCase();
+const isPaid = (invoice) => billingStatus(invoice.billing_status) === 'PAID';
+
 function PaymentModal({ invoices, onClose, onSubmit }) {
   const [selected, setSelected] = useState([]);
   const [method, setMethod] = useState('bank_transfer');
@@ -10,9 +13,13 @@ function PaymentModal({ invoices, onClose, onSubmit }) {
 
   const toggle = (id) => setSelected(p => p.includes(id) ? p.filter(x => x !== id) : [...p, id]);
 
-  const totalSelected = invoices
-    .filter(i => selected.includes(i.id) && i.billing_status !== 'paid')
-    .reduce((s, i) => s + Number(i.total_amount), 0);
+  const selectedTotals = invoices
+    .filter(i => selected.includes(i.id) && !isPaid(i))
+    .reduce((totals, invoice) => {
+      const currency = invoice.currency || 'TRY';
+      totals[currency] = (totals[currency] || 0) + Number(invoice.remaining_amount ?? invoice.total_amount ?? 0);
+      return totals;
+    }, {});
 
   const submit = async () => {
     if (!selected.length) return;
@@ -22,7 +29,7 @@ function PaymentModal({ invoices, onClose, onSubmit }) {
     } finally { setSaving(false); }
   };
 
-  const unpaid = invoices.filter(i => i.billing_status !== 'paid');
+  const unpaid = invoices.filter(i => !isPaid(i));
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 p-4">
@@ -47,7 +54,7 @@ function PaymentModal({ invoices, onClose, onSubmit }) {
                       <p className="text-sm font-medium text-gray-800">{inv.description || 'Taşımacılık Hizmeti'}</p>
                       <p className="text-xs text-gray-500">{inv.order_no} {inv.invoice_no ? `· #${inv.invoice_no}` : ''}</p>
                     </div>
-                    <p className="font-bold text-gray-800 text-sm">{Number(inv.total_amount).toLocaleString('tr-TR')} {inv.currency}</p>
+                    <p className="font-bold text-gray-800 text-sm">{Number(inv.remaining_amount ?? inv.total_amount ?? 0).toLocaleString('tr-TR')} {inv.currency}</p>
                   </label>
                 ))}
               </div>
@@ -73,7 +80,9 @@ function PaymentModal({ invoices, onClose, onSubmit }) {
               {selected.length > 0 && (
                 <div className="bg-blue-50 rounded-xl p-4 text-center">
                   <p className="text-sm text-gray-600">Seçili tutar</p>
-                  <p className="text-2xl font-bold text-blue-700">{totalSelected.toLocaleString('tr-TR')} TRY</p>
+                  {Object.entries(selectedTotals).map(([selectedCurrency, total]) => (
+                    <p key={selectedCurrency} className="text-2xl font-bold text-blue-700">{total.toLocaleString('tr-TR')} {selectedCurrency}</p>
+                  ))}
                 </div>
               )}
             </>
@@ -96,12 +105,14 @@ export default function CustomerFinance() {
   const [loading, setLoading] = useState(true);
   const [showPayment, setShowPayment] = useState(false);
   const [successMsg, setSuccessMsg] = useState('');
+  const [error, setError] = useState('');
 
   const load = () => {
     setLoading(true);
+    setError('');
     customerApi.get('/finance/summary')
       .then(r => setData(r.data.data))
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.message || 'Finans verileri yüklenemedi.'))
       .finally(() => setLoading(false));
   };
 
@@ -120,7 +131,16 @@ export default function CustomerFinance() {
     </div>
   );
 
-  const { totalInvoiced = 0, totalPaid = 0, outstanding = 0, currency = 'TRY', invoices = [] } = data || {};
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+      <AlertCircle className="w-9 h-9 text-red-500" />
+      <p className="text-sm text-red-600">{error}</p>
+      <button onClick={load} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium">Tekrar dene</button>
+    </div>
+  );
+
+  const { totalInvoiced = 0, totalPaid = 0, outstanding = 0, currency = 'TRY', byCurrency = [], invoices = [] } = data || {};
+  const hasOutstanding = byCurrency.some(row => row.outstanding > 0) || outstanding > 0;
 
   return (
     <div className="space-y-5">
@@ -129,13 +149,25 @@ export default function CustomerFinance() {
           <h1 className="text-xl font-bold text-gray-900">Finans / Bakiye</h1>
           <p className="text-sm text-gray-500 mt-0.5">Fatura ve ödeme durumunuz</p>
         </div>
-        {outstanding > 0 && (
+        {hasOutstanding && (
           <button onClick={() => setShowPayment(true)}
             className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-sm font-medium">
             <CreditCard className="w-4 h-4" /> Ödeme Yap
           </button>
         )}
       </div>
+
+      {byCurrency.length > 1 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+          {byCurrency.map(row => (
+            <div key={row.currency} className="bg-white rounded-xl border border-gray-100 p-4 text-sm">
+              <p className="font-semibold text-gray-800">{row.currency}</p>
+              <p className="text-gray-500 mt-1">Fatura: {row.totalInvoiced.toLocaleString('tr-TR')}</p>
+              <p className="text-red-700 font-medium">Bakiye: {row.outstanding.toLocaleString('tr-TR')}</p>
+            </div>
+          ))}
+        </div>
+      )}
 
       {successMsg && (
         <div className="bg-green-50 border border-green-200 text-green-700 text-sm px-4 py-3 rounded-xl">{successMsg}</div>
@@ -198,13 +230,13 @@ export default function CustomerFinance() {
                   <td className="px-4 py-3 text-blue-600 font-medium">{inv.order_no}</td>
                   <td className="px-4 py-3 text-gray-600 max-w-[200px] truncate">{inv.description || '—'}</td>
                   <td className="px-4 py-3 text-right font-semibold text-gray-800">
-                    {Number(inv.total_amount).toLocaleString('tr-TR')} {inv.currency}
+                    {Number(inv.remaining_amount ?? inv.total_amount ?? 0).toLocaleString('tr-TR')} {inv.currency}
                   </td>
                   <td className="px-4 py-3">
                     <span className={`text-xs px-2 py-1 rounded-full font-medium ${
-                      inv.billing_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                      isPaid(inv) ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
                     }`}>
-                      {inv.billing_status === 'paid' ? 'Ödendi' : 'Bekliyor'}
+                      {isPaid(inv) ? 'Ödendi' : 'Bekliyor'}
                     </span>
                   </td>
                   <td className="px-4 py-3 text-gray-500 text-xs">{new Date(inv.created_at).toLocaleDateString('tr-TR')}</td>

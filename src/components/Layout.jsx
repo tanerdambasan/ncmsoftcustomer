@@ -3,7 +3,7 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import {
   LayoutDashboard, Package, FileText, Truck, Wallet,
-  LogOut, Truck as TruckIcon, ChevronRight, Menu, X,
+  LogOut, Truck as TruckIcon, ChevronRight, Menu, X, Bell,
 } from 'lucide-react';
 
 const NAV = [
@@ -12,6 +12,7 @@ const NAV = [
   { to: '/bids',        label: 'Tekliflerim',        icon: FileText },
   { to: '/operations',  label: 'Operasyon Paneli',   icon: Truck },
   { to: '/finance',     label: 'Finans / Cari',      icon: Wallet },
+  { to: '/notifications', label: 'Bildirimler',       icon: Bell },
 ];
 
 function SidebarContent({ mobile, onClose }) {

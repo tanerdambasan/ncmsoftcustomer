@@ -1,31 +1,23 @@
 import React, { useEffect, useState } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import customerApi from '../../api/customerClient';
-import { ArrowLeft, MapPin, Truck, User, Phone, CheckCircle, Clock, AlertCircle } from 'lucide-react';
-
-const statusColors = {
-  new: 'bg-blue-100 text-blue-700',
-  confirmed: 'bg-purple-100 text-purple-700',
-  in_transit: 'bg-yellow-100 text-yellow-700',
-  at_customs: 'bg-orange-100 text-orange-700',
-  delivered: 'bg-green-100 text-green-700',
-  cancelled: 'bg-red-100 text-red-700',
-};
-
-const statusLabels = {
-  new: 'Yeni', confirmed: 'Onaylandı', in_transit: 'Yolda',
-  at_customs: 'Gümrükte', delivered: 'Teslim Edildi', cancelled: 'İptal',
-};
+import { ArrowLeft, MapPin, Truck, User, Phone, CheckCircle, Clock, AlertCircle, FileText, Download } from 'lucide-react';
+import { orderStatusColor, orderStatusLabel } from '../../utils/customerStatus';
 
 export default function CustomerOrderDetail() {
   const { id } = useParams();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [claimOpen, setClaimOpen] = useState(false);
+  const [claimSaving, setClaimSaving] = useState(false);
+  const [claimError, setClaimError] = useState('');
+  const [claimForm, setClaimForm] = useState({ claimType: 'damage', priority: 'high', quantity: '', unit: '', occurredAt: '', description: '' });
 
   useEffect(() => {
     customerApi.get(`/orders/${id}`)
       .then(r => setData(r.data.data))
-      .catch(() => {})
+      .catch(err => setError(err.response?.data?.message || 'Sipariş detayı yüklenemedi.'))
       .finally(() => setLoading(false));
   }, [id]);
 
@@ -35,13 +27,24 @@ export default function CustomerOrderDetail() {
     </div>
   );
 
+  if (error) return (
+    <div className="flex flex-col items-center justify-center h-64 gap-3 text-center">
+      <AlertCircle className="w-9 h-9 text-red-500" />
+      <p className="text-sm text-red-600">{error}</p>
+      <button onClick={() => window.location.reload()} className="px-4 py-2 rounded-lg bg-blue-600 text-white text-sm font-medium">Tekrar dene</button>
+    </div>
+  );
+
   if (!data) return (
     <div className="text-center py-20 text-gray-400">Sipariş bulunamadı.</div>
   );
 
-  const { order, statusHistory = [], tracking = [], finance = [], notes = [], items = [] } = data;
-  const sc = statusColors[order.status] || 'bg-gray-100 text-gray-600';
-  const sl = statusLabels[order.status] || order.status;
+  const {
+    order, statusHistory = [], milestones = [], exceptions = [], documents = [], claims = [],
+    deliverySignatures = [], tracking = [], finance = [], notes = [], items = [],
+  } = data;
+  const sc = orderStatusColor(order.status);
+  const sl = orderStatusLabel(order.status);
 
   return (
     <div className="space-y-5 max-w-4xl">
@@ -197,6 +200,45 @@ export default function CustomerOrderDetail() {
             </div>
           )}
 
+          {/* Documents / POD */}
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h2 className="font-semibold text-gray-800 mb-3 flex items-center gap-2">
+              <FileText className="w-4 h-4 text-blue-600" /> Belgeler ve Teslim Kanıtı
+            </h2>
+            {documents.length === 0 && deliverySignatures.length === 0 ? (
+              <p className="text-xs text-gray-400">Bu sipariş için müşteri görünür belge veya teslim imzası bulunmuyor.</p>
+            ) : (
+              <div className="space-y-2">
+                {documents.map(document => (
+                  <div key={document.id} className="flex items-center justify-between gap-3 border-b border-gray-50 last:border-0 py-2">
+                    <div className="min-w-0">
+                      <p className="text-sm font-medium text-gray-800 truncate">{document.file_name}</p>
+                      <p className="text-xs text-gray-400">{document.trip_no ? `Sefer: ${document.trip_no} · ` : ''}{document.file_type || 'Belge'} · {new Date(document.created_at).toLocaleString('tr-TR')}</p>
+                    </div>
+                    {document.file_url && (
+                      <a href={document.file_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 shrink-0">
+                        <Download className="w-3.5 h-3.5" /> Aç
+                      </a>
+                    )}
+                  </div>
+                ))}
+                {deliverySignatures.map(signature => (
+                  <div key={signature.id} className="flex items-center justify-between gap-3 border-t border-gray-100 pt-2">
+                    <div>
+                      <p className="text-sm font-medium text-gray-800 flex items-center gap-1.5"><CheckCircle className="w-4 h-4 text-green-600" /> Teslim imzası</p>
+                      <p className="text-xs text-gray-400">{signature.signer_name || 'İmzalayan belirtilmemiş'} · {new Date(signature.signed_at).toLocaleString('tr-TR')}</p>
+                    </div>
+                    {signature.signature_url && (
+                      <a href={signature.signature_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-xs text-blue-600 hover:text-blue-800 shrink-0">
+                        <Download className="w-3.5 h-3.5" /> İmzayı aç
+                      </a>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
           {/* Finance */}
           {finance.length > 0 && (
             <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
@@ -209,9 +251,9 @@ export default function CustomerOrderDetail() {
                       {f.invoice_no && <p className="text-xs text-gray-400">#{f.invoice_no}</p>}
                     </div>
                     <div className="text-right">
-                      <p className="font-semibold text-gray-800">{Number(f.total_amount).toLocaleString('tr-TR')} {f.currency}</p>
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${f.billing_status === 'paid' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
-                        {f.billing_status === 'paid' ? 'Ödendi' : 'Bekliyor'}
+                      <p className="font-semibold text-gray-800">{Number(f.remaining_amount ?? f.total_amount ?? 0).toLocaleString('tr-TR')} {f.currency}</p>
+                      <span className={`text-xs px-2 py-0.5 rounded-full ${String(f.billing_status || '').toUpperCase() === 'PAID' ? 'bg-green-100 text-green-700' : 'bg-yellow-100 text-yellow-700'}`}>
+                        {String(f.billing_status || '').toUpperCase() === 'PAID' ? 'Ödendi' : 'Bekliyor'}
                       </span>
                     </div>
                   </div>
@@ -221,8 +263,87 @@ export default function CustomerOrderDetail() {
           )}
         </div>
 
-        {/* Status timeline */}
+          {/* Status timeline */}
         <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <h2 className="font-semibold text-gray-800 mb-4">Operasyon Durakları</h2>
+            {milestones.length === 0 ? (
+              <p className="text-xs text-gray-400">Bu sipariş için planlı durak bilgisi bulunmuyor.</p>
+            ) : (
+              <div className="space-y-3">
+                {milestones.map((stop, index) => {
+                  const completed = Boolean(stop.actual_arrival || stop.actual_departure);
+                  return <div key={stop.id || index} className="flex gap-3">
+                    <div className={`mt-1 w-3 h-3 rounded-full border-2 ${completed ? 'bg-green-500 border-green-500' : 'bg-white border-blue-500'}`} />
+                    <div className="min-w-0"><p className="text-sm font-medium text-gray-800">{stop.stop_order != null ? `${stop.stop_order}. ` : ''}{stop.stop_type || 'Durak'}{stop.city ? ` · ${stop.city}` : ''}</p><p className="text-xs text-gray-500">{stop.address || 'Adres bilgisi yok'}</p><p className="text-xs text-gray-400 mt-1">Planlanan: {stop.planned_arrival ? new Date(stop.planned_arrival).toLocaleString('tr-TR') : 'Belirtilmemiş'}{completed && ` · Gerçekleşen: ${new Date(stop.actual_arrival || stop.actual_departure).toLocaleString('tr-TR')}`}</p></div>
+                  </div>;
+                })}
+              </div>
+            )}
+          </div>
+
+          {exceptions.length > 0 && <div className="bg-red-50 rounded-xl border border-red-200 p-5">
+            <h2 className="font-semibold text-red-800 mb-3">Operasyon İstisnaları</h2>
+            <div className="space-y-3">{exceptions.map(exception => <div key={exception.id} className="border-b border-red-100 last:border-0 pb-3 last:pb-0"><div className="flex items-center justify-between gap-3"><p className="text-sm font-medium text-red-900">{exception.title}</p><span className="text-xs text-red-700">{exception.status}</span></div>{exception.description && <p className="text-xs text-red-800 mt-1">{exception.description}</p>}<p className="text-xs text-red-600 mt-1">{new Date(exception.occurred_at).toLocaleString('tr-TR')}{exception.resolved_at ? ` · Çözüldü: ${new Date(exception.resolved_at).toLocaleString('tr-TR')}` : ''}</p></div>)}</div>
+          </div>}
+
+          <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
+            <div className="flex items-center justify-between gap-3 mb-3">
+              <h2 className="font-semibold text-gray-800">Hasar ve İtirazlar</h2>
+              <button type="button" onClick={() => { setClaimOpen(v => !v); setClaimError(''); }} className="text-xs font-medium text-blue-600 hover:text-blue-800">
+                {claimOpen ? 'Formu kapat' : 'Yeni itiraz bildir'}
+              </button>
+            </div>
+
+            {claimOpen && (
+              <form onSubmit={async event => {
+                event.preventDefault();
+                setClaimSaving(true); setClaimError('');
+                try {
+                  await customerApi.post(`/orders/${id}/claims`, {
+                    ...claimForm,
+                    quantity: claimForm.quantity || undefined,
+                    occurredAt: claimForm.occurredAt || undefined,
+                  });
+                  const refreshed = await customerApi.get(`/orders/${id}`);
+                  setData(refreshed.data.data);
+                  setClaimOpen(false);
+                  setClaimForm({ claimType: 'damage', priority: 'high', quantity: '', unit: '', occurredAt: '', description: '' });
+                } catch (err) {
+                  setClaimError(err.response?.data?.message || 'İtiraz kaydı oluşturulamadı.');
+                } finally { setClaimSaving(false); }
+              }} className="space-y-3 border-t border-gray-100 pt-3 mb-4">
+                {claimError && <p className="text-xs text-red-600 bg-red-50 rounded-lg p-2">{claimError}</p>}
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <select value={claimForm.claimType} onChange={e => setClaimForm(p => ({ ...p, claimType: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="damage">Hasarlı teslim</option>
+                    <option value="shortage">Eksik teslim</option>
+                    <option value="delay">Gecikme</option>
+                    <option value="wrong_address">Yanlış adres</option>
+                    <option value="pod_dispute">POD itirazı</option>
+                    <option value="other">Diğer</option>
+                  </select>
+                  <select value={claimForm.priority} onChange={e => setClaimForm(p => ({ ...p, priority: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm bg-white">
+                    <option value="normal">Normal</option>
+                    <option value="high">Yüksek</option>
+                    <option value="urgent">Acil</option>
+                  </select>
+                  <input type="number" min="0" step="any" placeholder="Etkilenen miktar" value={claimForm.quantity} onChange={e => setClaimForm(p => ({ ...p, quantity: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                  <input type="text" placeholder="Birim (koli, palet...)" value={claimForm.unit} onChange={e => setClaimForm(p => ({ ...p, unit: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <input type="datetime-local" value={claimForm.occurredAt} onChange={e => setClaimForm(p => ({ ...p, occurredAt: e.target.value }))} className="border border-gray-300 rounded-lg px-3 py-2 text-sm" />
+                <textarea required rows={3} placeholder="Olayı ve beklentinizi açıklayın..." value={claimForm.description} onChange={e => setClaimForm(p => ({ ...p, description: e.target.value }))} className="w-full border border-gray-300 rounded-lg px-3 py-2 text-sm resize-none" />
+                <button type="submit" disabled={claimSaving} className="px-4 py-2 bg-blue-600 text-white rounded-lg text-sm font-medium disabled:opacity-50">{claimSaving ? 'Kaydediliyor...' : 'İtirazı gönder'}</button>
+              </form>
+            )}
+
+            {claims.length === 0 ? (
+              <p className="text-xs text-gray-400">Bu siparişe bağlı itiraz kaydı bulunmuyor.</p>
+            ) : (
+              <div className="space-y-2">{claims.map(claim => <div key={claim.id} className="border-b border-gray-50 last:border-0 pb-2 last:pb-0"><div className="flex items-center justify-between gap-2"><p className="text-sm font-medium text-gray-800">{claim.subject}</p><span className="text-xs text-gray-500">{claim.status}</span></div><p className="text-xs text-gray-500 mt-1 whitespace-pre-line line-clamp-3">{claim.description}</p><p className="text-xs text-gray-400 mt-1">{claim.ticket_no} · {new Date(claim.created_at).toLocaleString('tr-TR')}</p></div>)}</div>
+            )}
+          </div>
+
           <div className="bg-white rounded-xl shadow-sm border border-gray-100 p-5">
             <h2 className="font-semibold text-gray-800 mb-4">Durum Geçmişi</h2>
             {statusHistory.length === 0 ? (
@@ -232,7 +353,7 @@ export default function CustomerOrderDetail() {
                 {statusHistory.map((s, i) => (
                   <li key={i} className="ml-4">
                     <div className="absolute -left-2 w-4 h-4 rounded-full bg-blue-500 border-2 border-white" />
-                    <p className="text-sm font-medium text-gray-800">{statusLabels[s.status] || s.status}</p>
+                    <p className="text-sm font-medium text-gray-800">{orderStatusLabel(s.status)}</p>
                     {s.note && <p className="text-xs text-gray-500">{s.note}</p>}
                     <p className="text-xs text-gray-400">{new Date(s.created_at).toLocaleString('tr-TR')}</p>
                   </li>

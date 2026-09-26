@@ -3,8 +3,10 @@ import axios from 'axios';
 
 const AuthContext = createContext(null);
 
-const SUPPLIER_ROLES = ['SUPPLIER', 'DRIVER'];
-const CUSTOMER_ROLES = ['CUSTOMER'];
+// Backend portal loginleri ADMIN rolünü de kabul eder; yönlendirme döngüsünü
+// önlemek için frontend aynı rol sözleşmesini kullanır.
+const SUPPLIER_ROLES = ['SUPPLIER', 'DRIVER', 'ADMIN'];
+const CUSTOMER_ROLES = ['CUSTOMER', 'ADMIN'];
 
 export function AuthProvider({ children }) {
   const [user, setUser]       = useState(null);

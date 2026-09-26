@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import api from '../api/client';
 import {
   FileText, Filter, AlertCircle, RefreshCw,
-  MapPin, Trash2, Pencil, X, CheckCircle,
+  MapPin, Trash2, Pencil, X, Search, Download, ChevronLeft, ChevronRight, History,
 } from 'lucide-react';
 
 const STATUS_CONFIG = {
@@ -41,7 +41,7 @@ function EditModal({ bid, onClose, onSuccess }) {
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
-      <div className="card w-full max-w-md">
+      <div className="card w-full max-w-md max-h-[90dvh] overflow-y-auto">
         <div className="flex items-center justify-between px-6 py-4 border-b">
           <h2 className="font-semibold">Teklifi Güncelle</h2>
           <button onClick={onClose}><X className="w-5 h-5 text-gray-400 hover:text-gray-700" /></button>
@@ -75,19 +75,35 @@ export default function MyBids() {
   const [loading, setLoading]   = useState(true);
   const [error, setError]       = useState('');
   const [filter, setFilter]     = useState('');
+  const [search, setSearch]     = useState('');
+  const [currency, setCurrency] = useState('');
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo]     = useState('');
+  const [page, setPage]         = useState(1);
+  const [pagination, setPagination] = useState({ page: 1, pageSize: 20, total: 0, totalPages: 0 });
   const [editing, setEditing]   = useState(null);
+  const [historyId, setHistoryId] = useState(null);
+  const [historyRows, setHistoryRows] = useState([]);
+  const [historyLoading, setHistoryLoading] = useState(false);
   const [toast, setToast]       = useState('');
 
   const load = useCallback(async () => {
     setLoading(true); setError('');
     try {
-      const params = filter ? { status: filter } : {};
+      const params = { page, pageSize: 20 };
+      if (filter) params.status = filter;
+      if (search) params.search = search;
+      if (currency) params.currency = currency;
+      if (dateFrom) params.dateFrom = dateFrom;
+      if (dateTo) params.dateTo = `${dateTo}T23:59:59`;
       const res = await api.get('/bids/mine', { params });
-      setBids(res.data.data || []);
+      const result = res.data.data || {};
+      setBids(result.items || []);
+      setPagination(result.pagination || { page, pageSize: 20, total: result.items?.length || 0, totalPages: 1 });
     } catch (e) {
       setError(e.response?.data?.message || e.message);
     } finally { setLoading(false); }
-  }, [filter]);
+  }, [filter, search, currency, dateFrom, dateTo, page]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -100,6 +116,44 @@ export default function MyBids() {
       load();
     } catch (e) {
       alert(e.response?.data?.message || e.message);
+    }
+  }
+
+  function updateFilter(setter) {
+    return value => { setter(value); setPage(1); };
+  }
+
+  async function exportBids(format = 'csv') {
+    const params = {};
+    if (filter) params.status = filter;
+    if (search) params.search = search;
+    if (currency) params.currency = currency;
+    if (dateFrom) params.dateFrom = dateFrom;
+    if (dateTo) params.dateTo = `${dateTo}T23:59:59`;
+    const response = await api.get('/bids/mine/export', { params: { ...params, format }, responseType: 'blob' });
+    const url = URL.createObjectURL(response.data);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = `tekliflerim.${format}`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
+  async function toggleHistory(bid) {
+    if (historyId === bid.id) {
+      setHistoryId(null);
+      return;
+    }
+    setHistoryId(bid.id);
+    setHistoryLoading(true);
+    try {
+      const response = await api.get(`/bids/${bid.id}/revisions`);
+      setHistoryRows(response.data.data || []);
+    } catch (e) {
+      setHistoryRows([]);
+      alert(e.response?.data?.message || e.message);
+    } finally {
+      setHistoryLoading(false);
     }
   }
 
@@ -116,14 +170,18 @@ export default function MyBids() {
           <h1 className="text-xl font-bold text-gray-900">Tekliflerim</h1>
           <p className="text-gray-500 text-sm">Verdiğiniz tüm teklifler.</p>
         </div>
-        <button onClick={load} className="btn-secondary"><RefreshCw className="w-4 h-4" /> Yenile</button>
+        <div className="flex items-center gap-2">
+          <button onClick={() => exportBids('csv')} className="btn-secondary" title="Gerçek kayıtları CSV olarak indir"><Download className="w-4 h-4" /> CSV</button>
+          <button onClick={() => exportBids('pdf')} className="btn-secondary" title="Gerçek kayıtları PDF olarak indir"><Download className="w-4 h-4" /> PDF</button>
+          <button onClick={load} className="btn-secondary"><RefreshCw className="w-4 h-4" /> Yenile</button>
+        </div>
       </div>
 
       {/* Filter tabs */}
       <div className="flex gap-2 mb-5 flex-wrap">
         {FILTERS.map(f => (
           <button key={f.value}
-            onClick={() => setFilter(f.value)}
+            onClick={() => { setFilter(f.value); setPage(1); }}
             className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
               filter === f.value
                 ? 'bg-blue-600 text-white border-blue-600'
@@ -132,6 +190,22 @@ export default function MyBids() {
             {f.label}
           </button>
         ))}
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-5">
+        <div className="relative">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400" />
+          <input className="input pl-9" placeholder="İhale veya rota ara" value={search}
+            onChange={e => updateFilter(setSearch)(e.target.value)} />
+        </div>
+        <select className="input" value={currency} onChange={e => updateFilter(setCurrency)(e.target.value)}>
+          <option value="">Para birimi</option>
+          <option value="TRY">TRY</option>
+          <option value="USD">USD</option>
+          <option value="EUR">EUR</option>
+        </select>
+        <input type="date" className="input" value={dateFrom} onChange={e => updateFilter(setDateFrom)(e.target.value)} title="Başlangıç tarihi" />
+        <input type="date" className="input" value={dateTo} onChange={e => updateFilter(setDateTo)(e.target.value)} title="Bitiş tarihi" />
       </div>
 
       {error && <div className="flex items-center gap-2 text-red-600 mb-4"><AlertCircle className="w-4 h-4" />{error}</div>}
@@ -212,9 +286,36 @@ export default function MyBids() {
                     </button>
                   </div>
                 )}
+                <button onClick={() => toggleHistory(bid)} className="mt-3 text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1">
+                  <History className="w-3.5 h-3.5" /> {historyId === bid.id ? 'Revizyon geçmişini gizle' : 'Revizyon geçmişi'}
+                </button>
+                {historyId === bid.id && (
+                  <div className="mt-3 rounded-lg bg-gray-50 border border-gray-100 p-3 space-y-2">
+                    {historyLoading ? <p className="text-xs text-gray-400">Geçmiş yükleniyor…</p> : historyRows.length === 0 ? <p className="text-xs text-gray-400">Revizyon kaydı bulunamadı.</p> : historyRows.map(row => (
+                      <div key={row.id} className="flex flex-wrap items-center justify-between gap-2 text-xs text-gray-600">
+                        <span>v{row.version} · {new Date(row.createdAt).toLocaleString('tr-TR')}</span>
+                        <span className="font-medium text-gray-900">{Number(row.amount).toLocaleString('tr-TR')} {row.currency}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             );
           })}
+        </div>
+      )}
+
+      {!loading && pagination.totalPages > 1 && (
+        <div className="flex items-center justify-between mt-5 text-sm text-gray-500">
+          <span>{pagination.total} kayıt · Sayfa {pagination.page} / {pagination.totalPages}</span>
+          <div className="flex items-center gap-2">
+            <button className="btn-secondary px-2" disabled={page <= 1} onClick={() => setPage(value => Math.max(1, value - 1))} title="Önceki sayfa">
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button className="btn-secondary px-2" disabled={page >= pagination.totalPages} onClick={() => setPage(value => Math.min(pagination.totalPages, value + 1))} title="Sonraki sayfa">
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
         </div>
       )}
 
